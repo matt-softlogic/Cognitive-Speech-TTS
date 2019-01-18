@@ -503,7 +503,7 @@ namespace TTSSample
             // Unified Speech Service key
             // Free: https://azure.microsoft.com/en-us/try/cognitive-services/?api=speech-services
             // Paid: https://go.microsoft.com/fwlink/?LinkId=872236&clcid=0x409
-            Authentication auth = new Authentication("11336fb4ab73484c827e5b70831d92d8");
+            Authentication auth = new Authentication("Your API Key Goes Here");
 
             try
             {
