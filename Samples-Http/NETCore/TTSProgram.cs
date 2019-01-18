@@ -42,7 +42,7 @@ using System.Net.Http;
 using System.Threading.Tasks;
 using System.Runtime.InteropServices;
 using System.Xml.Linq;
-
+using NAudio.Wave;
 
 namespace TTSSample
 {
@@ -51,7 +51,7 @@ namespace TTSSample
     /// </summary>
     public class Authentication
     {
-        // Issue token uri for new unified SpeechService API "https://westus.api.cognitive.microsoft.com/sts/v1.0/issueToken". 
+        // Issue token uri for new unified SpeechService API "https://westus.api.cognitive.microsoft.com/sts/v1.0/issueToken".
         // Note: new unified SpeechService API key and issue token uri is per region
         public static readonly string AccessUri = "https://westus.api.cognitive.microsoft.com/sts/v1.0/issueToken";
         private string apiKey;
@@ -117,7 +117,7 @@ namespace TTSSample
 
         private async Task<string> HttpPost(string accessUri, string apiKey)
         {
-            // Prepare OAuth request 
+            // Prepare OAuth request
             WebRequest webRequest = WebRequest.Create(accessUri);
             webRequest.Method = "POST";
             webRequest.Headers["Ocp-Apim-Subscription-Key"] = apiKey;
@@ -296,9 +296,9 @@ namespace TTSSample
                     try
                     {
                         if (responseMessage.IsCompleted && responseMessage.Result != null && responseMessage.Result.IsSuccessStatusCode)
-                        {      
+                        {
                             var httpStream = await responseMessage.Result.Content.ReadAsStreamAsync().ConfigureAwait(false);
-                            this.AudioAvailable(new GenericEventArgs<Stream>(httpStream));          
+                            this.AudioAvailable(new GenericEventArgs<Stream>(httpStream));
                         }
                         else
                         {
@@ -464,11 +464,23 @@ namespace TTSSample
         static void StoreAudio(object sender, GenericEventArgs<Stream> args)
         {
             Console.WriteLine(args.EventData);
-            using (var file = File.OpenWrite(Path.Combine(Directory.GetCurrentDirectory(), $"{ Guid.NewGuid() }.wav")))
+            var filePath = Path.Combine(Directory.GetCurrentDirectory(), $"{ Guid.NewGuid() }.wav");
+            using (var file = File.OpenWrite(filePath))
             {
                 args.EventData.CopyTo(file);
 
                 file.Flush();
+            }
+
+            using(var audioFile = new AudioFileReader(filePath))
+            using(var outputDevice = new WaveOutEvent())
+            {
+                outputDevice.Init(audioFile);
+                outputDevice.Play();
+                while (outputDevice.PlaybackState == PlaybackState.Playing)
+                {
+                    Thread.Sleep(1000);
+                }
             }
         }
 
@@ -490,8 +502,8 @@ namespace TTSSample
             // The way to get api key:
             // Unified Speech Service key
             // Free: https://azure.microsoft.com/en-us/try/cognitive-services/?api=speech-services
-            // Paid: https://go.microsoft.com/fwlink/?LinkId=872236&clcid=0x409 
-            Authentication auth = new Authentication("Your api keys goes here");
+            // Paid: https://go.microsoft.com/fwlink/?LinkId=872236&clcid=0x409
+            Authentication auth = new Authentication("11336fb4ab73484c827e5b70831d92d8");
 
             try
             {
@@ -506,33 +518,45 @@ namespace TTSSample
                 return;
             }
 
-            Console.WriteLine("Starting TTSSample request code execution.");
-
-            // Note: new unified SpeechService API synthesis endpoint is per region, choose the region close to your service to minimize the latency
-            // Also must use the same region in request as authentication, e.g. both westus 
-            string requestUri = "https://westus.tts.speech.microsoft.com/cognitiveservices/v1";
-
-            var cortana = new Synthesize(new Synthesize.InputOptions()
+            Console.WriteLine("Starting TTSSample request code execution...");
+            string text = string.Empty;
+            do
             {
-                RequestUri = new Uri(requestUri),
-                // Text to be spoken.
-                Text = "Hi, how are you doing?",
-                VoiceType = Gender.Female,
-                // Refer to the documentation for complete list of supported locales.
-                Locale = "en-US",
-                // You can also customize the output voice. Refer to the documentation to view the different
-                // voices that the TTS service can output.
-                // VoiceName = "Microsoft Server Speech Text to Speech Voice (en-US, ZiraRUS)",
-                VoiceName = "Microsoft Server Speech Text to Speech Voice (en-US, Jessa24KRUS)",
+                Console.WriteLine("Please type a sentence or press Enter to exit.");
+                text = Console.ReadLine();
+                if(text == string.Empty)
+                    return;
 
-                // Service can return audio in different output format. 
-                OutputFormat = AudioOutputFormat.Riff24Khz16BitMonoPcm,
-                AuthorizationToken = "Bearer " + accessToken,
-            });
+                // Note: new unified SpeechService API synthesis endpoint is per region, choose the region close to your service to minimize the latency
+                // Also must use the same region in request as authentication, e.g. both westus
+                string requestUri = "https://westus.tts.speech.microsoft.com/cognitiveservices/v1";
 
-            cortana.OnAudioAvailable += StoreAudio;
-            cortana.OnError += ErrorHandler;
-            cortana.Speak(CancellationToken.None).Wait();
+                var synthInputOptions = new Synthesize.InputOptions()
+                {
+                    RequestUri = new Uri(requestUri),
+                    // Text to be spoken.
+                    Text = text,
+                    //Text = "Good morning Chelley, how are you doing?",
+                    VoiceType = Gender.Female,
+                    // Refer to the documentation for complete list of supported locales.
+                    Locale = "en-US",
+                    // You can also customize the output voice. Refer to the documentation to view the different
+                    // voices that the TTS service can output.
+                    VoiceName = "Microsoft Server Speech Text to Speech Voice (en-US, ZiraRUS)",
+                    //VoiceName = "Microsoft Server Speech Text to Speech Voice (en-US, Jessa24KRUS)",
+
+                    // Service can return audio in different output format.
+                    OutputFormat = AudioOutputFormat.Riff24Khz16BitMonoPcm,
+                    AuthorizationToken = "Bearer " + accessToken,
+                };
+
+                var cortana = new Synthesize(synthInputOptions);
+                cortana.OnAudioAvailable += StoreAudio;
+                cortana.OnError += ErrorHandler;
+                cortana.Speak(CancellationToken.None).Wait();
+            } while (true);
+
         }
+
     }
 }
